@@ -16,45 +16,81 @@
 
 #define PI 3.14159265358979323846
 
-static int get_width(void)  { return N; }
-static int get_height(void) { return N; }
+void fft_student(double in[N][N],
+                 double re[N][N],
+                 double im[N][N],
+                 double amp[N][N])
+{
+    double c[N][N];
+    double s[N][N];
+    double tmp_re[N][N];
+    double tmp_im[N][N];
 
-// Read a[i][j] into *dest; returns 0 if the index is out of bounds
-static int get_element(double a[N][N], int i, int j, double *dest) {
-    if (i < 0 || i >= get_height() || j < 0 || j >= get_width())
-        return 0;
-    *dest = a[i][j];
-    return 1;
-}
+    const double step = 2.0 * PI / N;
+    const double scale = 1.0 / N;
 
-static double normalization(void) {
-    return sqrt((double)get_width() * get_height());
-}
+    int k, x, y;
 
-static double angle(int xWave, int xSpace, int yWave, int ySpace) {
-    return 2 * PI * ((1.0 * xWave * xSpace / get_width()) + (1.0 * yWave * ySpace / get_height()));
-}
+    /*
+     * Precompute twiddle factors.
+     * c[k][x] = cos(2*pi*k*x/N)
+     * s[k][x] = sin(2*pi*k*x/N)
+     */
+    for (k = 0; k < N; k++) {
+        for (x = 0; x < N; x++) {
+            int index = (k * x) % N;
+            double angle = step * index;
 
-void fft_student(double in[N][N], double re[N][N], double im[N][N], double amp[N][N]) {
-    int yWave, xWave, ySpace, xSpace;
-    double value;
-    // Two outer loops iterate on output data
-    for (yWave = 0; yWave < get_height(); yWave++) {
-        for (xWave = 0; xWave < get_width(); xWave++) {
-            re[yWave][xWave] = 0.0;
-            im[yWave][xWave] = 0.0;
-            // Two inner loops iterate on input data
-            for (xSpace = 0; xSpace < get_width(); xSpace++) {
-                for (ySpace = 0; ySpace < get_height(); ySpace++) {
-                    // Compute real, imag, and amplitude
-                    get_element(in, ySpace, xSpace, &value);
-                    re[yWave][xWave] += value * cos(angle(xWave, xSpace, yWave, ySpace)) / normalization();
-                    get_element(in, ySpace, xSpace, &value);
-                    im[yWave][xWave] -= value * sin(angle(xWave, xSpace, yWave, ySpace)) / normalization();
-                    amp[yWave][xWave] = sqrt(re[yWave][xWave] * re[yWave][xWave] +
-                                             im[yWave][xWave] * im[yWave][xWave]);
-                }
+            c[k][x] = cos(angle);
+            s[k][x] = sin(angle);
+        }
+    }
+
+    /*
+     * First pass: transform each row.
+     * Store the complex intermediate result.
+     */
+    for (y = 0; y < N; y++) {
+        for (k = 0; k < N; k++) {
+            double sum_re = 0.0;
+            double sum_im = 0.0;
+
+            for (x = 0; x < N; x++) {
+                double value = in[y][x];
+
+                sum_re += value * c[k][x];
+                sum_im -= value * s[k][x];
             }
+
+            tmp_re[y][k] = sum_re;
+            tmp_im[y][k] = sum_im;
+        }
+    }
+
+    /*
+     * Second pass: transform columns.
+     * Apply the required overall normalization of 1/N.
+     */
+    for (k = 0; k < N; k++) {
+        for (x = 0; x < N; x++) {
+            double sum_re = 0.0;
+            double sum_im = 0.0;
+
+            for (y = 0; y < N; y++) {
+                double a = tmp_re[y][x];
+                double b = tmp_im[y][x];
+                double co = c[k][y];
+                double si = s[k][y];
+
+                sum_re += a * co + b * si;
+                sum_im += b * co - a * si;
+            }
+
+            re[k][x] = sum_re * scale;
+            im[k][x] = sum_im * scale;
+
+            amp[k][x] = sqrt(re[k][x] * re[k][x]
+                           + im[k][x] * im[k][x]);
         }
     }
 }
